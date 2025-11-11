@@ -392,154 +392,85 @@ function loadTheme() {
     updateThemeButton(savedTheme);
 }
 
-// Функция для сохранения в PDF
-function saveToPDF() {
+// Функция для сохранения в Excel (CSV)
+function saveToExcel() {
     if (currentFilteredData.length === 0) {
         alert('Нет данных для сохранения!');
         return;
     }
     
-    const pdfButton = document.getElementById('save-pdf');
-    const originalText = pdfButton.innerHTML;
+    const excelButton = document.getElementById('save-excel');
+    const originalText = excelButton.innerHTML;
     
     // Показываем индикатор загрузки
-    pdfButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Генерация PDF...';
-    pdfButton.disabled = true;
-    pdfButton.classList.add('pdf-loading');
+    excelButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Подготовка Excel...';
+    excelButton.disabled = true;
+    excelButton.classList.add('loading');
     
     // Используем setTimeout чтобы дать интерфейсу обновиться
     setTimeout(() => {
         try {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
+            // Создаем CSV содержимое
+            const headers = ['Группа', 'Преподаватель', 'Подгруппа', 'Дисциплина', 'Кабинет', 'Время', 'Дата'];
+            let csvContent = headers.join(';') + '\n';
             
-            // Устанавливаем шрифт с поддержкой кириллицы
-            doc.setFont('helvetica');
-            
-            let yPosition = 20;
-            
-            // Заголовок
-            doc.setFontSize(16);
-            doc.text('Расписание занятий', 105, yPosition, { align: 'center' });
-            yPosition += 10;
-            
-            doc.setFontSize(12);
-            doc.text('Междуреченский агропромышленный колледж', 105, yPosition, { align: 'center' });
-            yPosition += 15;
-            
-            // Информация о фильтрах
-            doc.setFontSize(10);
-            let filterInfo = 'Все данные';
-            if (currentFilters.group || currentFilters.teacher || currentFilters.date) {
-                filterInfo = 'Отфильтрованные данные: ';
-                const filters = [];
-                if (currentFilters.group) filters.push('Группа: ' + currentFilters.group);
-                if (currentFilters.teacher) filters.push('Преподаватель: ' + currentFilters.teacher);
-                if (currentFilters.date) filters.push('Дата: ' + currentFilters.date);
-                filterInfo += filters.join(', ');
-            }
-            
-            doc.text(filterInfo, 20, yPosition);
-            yPosition += 7;
-            doc.text('Всего занятий: ' + currentFilteredData.length, 20, yPosition);
-            yPosition += 15;
-            
-            // Создаем простую таблицу вручную
-            const headers = ['Группа', 'Преподаватель', 'Подгр.', 'Дисциплина', 'Кабинет', 'Время', 'Дата'];
-            const columnWidths = [20, 25, 15, 40, 15, 25, 20];
-            
-            // Заголовки таблицы
-            doc.setFillColor(99, 102, 241);
-            doc.setTextColor(255, 255, 255);
-            doc.setFontSize(8);
-            doc.setFont(undefined, 'bold');
-            
-            let xPosition = 20;
-            headers.forEach((header, index) => {
-                doc.rect(xPosition, yPosition, columnWidths[index], 8, 'F');
-                doc.text(header, xPosition + 2, yPosition + 5);
-                xPosition += columnWidths[index];
-            });
-            
-            yPosition += 8;
-            
-            // Данные таблицы
-            doc.setTextColor(0, 0, 0);
-            doc.setFont(undefined, 'normal');
-            
-            currentFilteredData.forEach((item, rowIndex) => {
-                // Чередование цветов фона
-                if (rowIndex % 2 === 0) {
-                    doc.setFillColor(240, 240, 240);
-                    doc.rect(20, yPosition, 160, 8, 'F');
-                }
-                
-                xPosition = 20;
-                const rowData = [
-                    item.group || '-',
-                    item.teacher || '-',
-                    item.subgroup || '-',
-                    item.discipline || '-',
-                    item.classroom || '-',
-                    item.time || '-',
-                    item.date || '-'
+            // Добавляем данные
+            currentFilteredData.forEach(item => {
+                const row = [
+                    item.group || '',
+                    item.teacher || '',
+                    item.subgroup || '',
+                    item.discipline || '',
+                    item.classroom || '',
+                    item.time || '',
+                    item.date || ''
                 ];
                 
-                rowData.forEach((cell, cellIndex) => {
-                    // Обрезаем длинный текст
-                    let displayText = cell;
-                    if (cell.length > 20 && cellIndex === 3) { // Дисциплина
-                        displayText = cell.substring(0, 20) + '...';
-                    } else if (cell.length > 15) {
-                        displayText = cell.substring(0, 15) + '...';
+                // Экранируем значения, которые содержат точку с запятой или кавычки
+                const escapedRow = row.map(field => {
+                    if (field.includes(';') || field.includes('"') || field.includes('\n')) {
+                        return '"' + field.replace(/"/g, '""') + '"';
                     }
-                    
-                    doc.text(displayText, xPosition + 2, yPosition + 5);
-                    xPosition += columnWidths[cellIndex];
+                    return field;
                 });
                 
-                yPosition += 8;
-                
-                // Проверяем, не вышли ли за пределы страницы
-                if (yPosition > 270) {
-                    doc.addPage();
-                    yPosition = 20;
-                    
-                    // Рисуем заголовки на новой странице
-                    doc.setFillColor(99, 102, 241);
-                    doc.setTextColor(255, 255, 255);
-                    doc.setFont(undefined, 'bold');
-                    
-                    xPosition = 20;
-                    headers.forEach((header, index) => {
-                        doc.rect(xPosition, yPosition, columnWidths[index], 8, 'F');
-                        doc.text(header, xPosition + 2, yPosition + 5);
-                        xPosition += columnWidths[index];
-                    });
-                    
-                    yPosition += 8;
-                    doc.setTextColor(0, 0, 0);
-                    doc.setFont(undefined, 'normal');
-                }
+                csvContent += escapedRow.join(';') + '\n';
             });
             
-            // Футер
-            const generatedDate = new Date().toLocaleString('ru-RU');
-            doc.setFontSize(8);
-            doc.text('Сгенерировано: ' + generatedDate, 20, 280);
+            // Создаем BOM для корректного отображения кириллицы в Excel
+            const BOM = '\uFEFF';
+            csvContent = BOM + csvContent;
             
-            // Сохраняем PDF
-            const fileName = 'Расписание_' + new Date().toISOString().split('T')[0] + '.pdf';
-            doc.save(fileName);
+            // Создаем blob и ссылку для скачивания
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            
+            // Создаем имя файла с датой
+            const today = new Date().toISOString().split('T')[0];
+            const fileName = `Расписание_${today}.csv`;
+            
+            // Настраиваем ссылку для скачивания
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden';
+            
+            // Добавляем ссылку в документ и кликаем по ней
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // Освобождаем URL
+            setTimeout(() => URL.revokeObjectURL(url), 100);
             
         } catch (error) {
-            console.error('Ошибка при создании PDF:', error);
-            alert('Произошла ошибка при создании PDF файла: ' + error.message);
+            console.error('Ошибка при создании Excel файла:', error);
+            alert('Произошла ошибка при создании Excel файла');
         } finally {
             // Восстанавливаем кнопку
-            pdfButton.innerHTML = originalText;
-            pdfButton.disabled = false;
-            pdfButton.classList.remove('pdf-loading');
+            excelButton.innerHTML = originalText;
+            excelButton.disabled = false;
+            excelButton.classList.remove('loading');
         }
     }, 100);
 }
@@ -600,6 +531,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Обработчик для переключения темы
     document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
     
-    // Обработчик для сохранения PDF
-    document.getElementById('save-pdf').addEventListener('click', saveToPDF);
+    // Обработчик для сохранения Excel
+    document.getElementById('save-excel').addEventListener('click', saveToExcel);
 });
