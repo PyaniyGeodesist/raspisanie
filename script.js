@@ -1,5 +1,6 @@
 // Глобальные переменные для хранения данных и фильтров
 let allScheduleData = [];
+let currentFilteredData = [];
 let currentFilters = {
     group: '',
     teacher: '',
@@ -19,6 +20,25 @@ async function loadSchedule() {
         
         // Парсим CSV и сохраняем все данные
         allScheduleData = parseCSV(csvData);
+        
+        // СОРТИРОВКА ПО ВРЕМЕНИ: сначала по дате, затем по времени начала
+        allScheduleData.sort((a, b) => {
+            // Сначала сравниваем даты
+            const dateA = parseDate(a.date);
+            const dateB = parseDate(b.date);
+            
+            if (dateA !== dateB) {
+                return dateA - dateB;
+            }
+            
+            // Если даты одинаковые, сравниваем время начала
+            const timeA = parseTime(a.time);
+            const timeB = parseTime(b.time);
+            
+            return timeA - timeB;
+        });
+        
+        currentFilteredData = [...allScheduleData];
         
         // Заполняем таблицу
         populateTable(allScheduleData);
@@ -40,6 +60,66 @@ async function loadSchedule() {
         showError('Ошибка загрузки файла с расписанием. Проверьте наличие файла data.csv');
         hideLoadingIndicator();
     }
+}
+
+// Функция для парсинга даты в формате DD.MM.YYYY
+function parseDate(dateString) {
+    if (!dateString) return 0;
+    
+    const parts = dateString.split('.');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]) - 1; // месяцы в JS с 0 до 11
+        const year = parseInt(parts[2]);
+        return new Date(year, month, day).getTime();
+    }
+    return 0;
+}
+
+// Функция для парсинга времени (берет первое время из строки)
+function parseTime(timeString) {
+    if (!timeString) return 9999; // Большое число для пустого времени
+    
+    // Извлекаем первое время из строки (до пробела или дефиса)
+    let firstTime = timeString;
+    
+    // Если есть пробел, берем часть до пробела
+    if (timeString.includes(' ')) {
+        firstTime = timeString.split(' ')[0];
+    }
+    
+    // Если есть дефис, берем часть до дефиса
+    if (firstTime.includes('-')) {
+        firstTime = firstTime.split('-')[0];
+    }
+    
+    // Убираем возможные точки и пробелы
+    firstTime = firstTime.replace('.', '').trim();
+    
+    // Преобразуем в минуты от начала дня
+    if (firstTime.length >= 3) {
+        let hours = 0;
+        let minutes = 0;
+        
+        if (firstTime.length === 3) {
+            // Формат типа "845"
+            hours = parseInt(firstTime.substring(0, 1));
+            minutes = parseInt(firstTime.substring(1, 3));
+        } else if (firstTime.length === 4) {
+            // Формат типа "0845" или "845"
+            if (firstTime.startsWith('0')) {
+                hours = parseInt(firstTime.substring(0, 2));
+                minutes = parseInt(firstTime.substring(2, 4));
+            } else {
+                hours = parseInt(firstTime.substring(0, 2));
+                minutes = parseInt(firstTime.substring(2, 4));
+            }
+        }
+        
+        return hours * 60 + minutes;
+    }
+    
+    return 9999; // Если не удалось распарсить
 }
 
 // Функция парсинга CSV с учетом структуры вашего файла
@@ -109,6 +189,8 @@ function parseCSVRow(row) {
 function populateTable(data) {
     const tableBody = document.querySelector('#schedule-table tbody');
     tableBody.innerHTML = '';
+    
+    currentFilteredData = [...data];
     
     if (data.length === 0) {
         const row = document.createElement('tr');
@@ -201,8 +283,8 @@ function populateFilters(data) {
     
     // Заполняем фильтр дат (сортируем по дате)
     const sortedDates = Array.from(dates).sort((a, b) => {
-        const dateA = new Date(a.split('.').reverse().join('-'));
-        const dateB = new Date(b.split('.').reverse().join('-'));
+        const dateA = parseDate(a);
+        const dateB = parseDate(b);
         return dateA - dateB;
     });
     
@@ -232,11 +314,28 @@ function populateFilters(data) {
 
 // Функция применения фильтров
 function applyFilters() {
-    const filteredData = allScheduleData.filter(item => {
+    let filteredData = allScheduleData.filter(item => {
         if (currentFilters.group && item.group !== currentFilters.group) return false;
         if (currentFilters.teacher && item.teacher !== currentFilters.teacher) return false;
         if (currentFilters.date && item.date !== currentFilters.date) return false;
         return true;
+    });
+    
+    // Применяем сортировку к отфильтрованным данным
+    filteredData.sort((a, b) => {
+        // Сначала сравниваем даты
+        const dateA = parseDate(a.date);
+        const dateB = parseDate(b.date);
+        
+        if (dateA !== dateB) {
+            return dateA - dateB;
+        }
+        
+        // Если даты одинаковые, сравниваем время начала
+        const timeA = parseTime(a.time);
+        const timeB = parseTime(b.time);
+        
+        return timeA - timeB;
     });
     
     populateTable(filteredData);
@@ -291,6 +390,158 @@ function loadTheme() {
     const savedTheme = localStorage.getItem('theme') || 'light';
     document.documentElement.setAttribute('data-theme', savedTheme);
     updateThemeButton(savedTheme);
+}
+
+// Функция для сохранения в PDF
+function saveToPDF() {
+    if (currentFilteredData.length === 0) {
+        alert('Нет данных для сохранения!');
+        return;
+    }
+    
+    const pdfButton = document.getElementById('save-pdf');
+    const originalText = pdfButton.innerHTML;
+    
+    // Показываем индикатор загрузки
+    pdfButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Генерация PDF...';
+    pdfButton.disabled = true;
+    pdfButton.classList.add('pdf-loading');
+    
+    // Используем setTimeout чтобы дать интерфейсу обновиться
+    setTimeout(() => {
+        try {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            // Устанавливаем шрифт с поддержкой кириллицы
+            doc.setFont('helvetica');
+            
+            let yPosition = 20;
+            
+            // Заголовок
+            doc.setFontSize(16);
+            doc.text('Расписание занятий', 105, yPosition, { align: 'center' });
+            yPosition += 10;
+            
+            doc.setFontSize(12);
+            doc.text('Междуреченский агропромышленный колледж', 105, yPosition, { align: 'center' });
+            yPosition += 15;
+            
+            // Информация о фильтрах
+            doc.setFontSize(10);
+            let filterInfo = 'Все данные';
+            if (currentFilters.group || currentFilters.teacher || currentFilters.date) {
+                filterInfo = 'Отфильтрованные данные: ';
+                const filters = [];
+                if (currentFilters.group) filters.push('Группа: ' + currentFilters.group);
+                if (currentFilters.teacher) filters.push('Преподаватель: ' + currentFilters.teacher);
+                if (currentFilters.date) filters.push('Дата: ' + currentFilters.date);
+                filterInfo += filters.join(', ');
+            }
+            
+            doc.text(filterInfo, 20, yPosition);
+            yPosition += 7;
+            doc.text('Всего занятий: ' + currentFilteredData.length, 20, yPosition);
+            yPosition += 15;
+            
+            // Создаем простую таблицу вручную
+            const headers = ['Группа', 'Преподаватель', 'Подгр.', 'Дисциплина', 'Кабинет', 'Время', 'Дата'];
+            const columnWidths = [20, 25, 15, 40, 15, 25, 20];
+            
+            // Заголовки таблицы
+            doc.setFillColor(99, 102, 241);
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'bold');
+            
+            let xPosition = 20;
+            headers.forEach((header, index) => {
+                doc.rect(xPosition, yPosition, columnWidths[index], 8, 'F');
+                doc.text(header, xPosition + 2, yPosition + 5);
+                xPosition += columnWidths[index];
+            });
+            
+            yPosition += 8;
+            
+            // Данные таблицы
+            doc.setTextColor(0, 0, 0);
+            doc.setFont(undefined, 'normal');
+            
+            currentFilteredData.forEach((item, rowIndex) => {
+                // Чередование цветов фона
+                if (rowIndex % 2 === 0) {
+                    doc.setFillColor(240, 240, 240);
+                    doc.rect(20, yPosition, 160, 8, 'F');
+                }
+                
+                xPosition = 20;
+                const rowData = [
+                    item.group || '-',
+                    item.teacher || '-',
+                    item.subgroup || '-',
+                    item.discipline || '-',
+                    item.classroom || '-',
+                    item.time || '-',
+                    item.date || '-'
+                ];
+                
+                rowData.forEach((cell, cellIndex) => {
+                    // Обрезаем длинный текст
+                    let displayText = cell;
+                    if (cell.length > 20 && cellIndex === 3) { // Дисциплина
+                        displayText = cell.substring(0, 20) + '...';
+                    } else if (cell.length > 15) {
+                        displayText = cell.substring(0, 15) + '...';
+                    }
+                    
+                    doc.text(displayText, xPosition + 2, yPosition + 5);
+                    xPosition += columnWidths[cellIndex];
+                });
+                
+                yPosition += 8;
+                
+                // Проверяем, не вышли ли за пределы страницы
+                if (yPosition > 270) {
+                    doc.addPage();
+                    yPosition = 20;
+                    
+                    // Рисуем заголовки на новой странице
+                    doc.setFillColor(99, 102, 241);
+                    doc.setTextColor(255, 255, 255);
+                    doc.setFont(undefined, 'bold');
+                    
+                    xPosition = 20;
+                    headers.forEach((header, index) => {
+                        doc.rect(xPosition, yPosition, columnWidths[index], 8, 'F');
+                        doc.text(header, xPosition + 2, yPosition + 5);
+                        xPosition += columnWidths[index];
+                    });
+                    
+                    yPosition += 8;
+                    doc.setTextColor(0, 0, 0);
+                    doc.setFont(undefined, 'normal');
+                }
+            });
+            
+            // Футер
+            const generatedDate = new Date().toLocaleString('ru-RU');
+            doc.setFontSize(8);
+            doc.text('Сгенерировано: ' + generatedDate, 20, 280);
+            
+            // Сохраняем PDF
+            const fileName = 'Расписание_' + new Date().toISOString().split('T')[0] + '.pdf';
+            doc.save(fileName);
+            
+        } catch (error) {
+            console.error('Ошибка при создании PDF:', error);
+            alert('Произошла ошибка при создании PDF файла: ' + error.message);
+        } finally {
+            // Восстанавливаем кнопку
+            pdfButton.innerHTML = originalText;
+            pdfButton.disabled = false;
+            pdfButton.classList.remove('pdf-loading');
+        }
+    }, 100);
 }
 
 // Показать индикатор загрузки
@@ -348,6 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Обработчик для переключения темы
     document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+    
+    // Обработчик для сохранения PDF
+    document.getElementById('save-pdf').addEventListener('click', saveToPDF);
 });
-
-// Убрано автоматическое обновление каждые 5 минут
