@@ -3,6 +3,8 @@
     --primary-hover: #4f46e5;
     --accent-color: #8b5cf6;
     --success-color: #10b981;
+    --excel-color: #217346;
+    --excel-hover: #1a5c38;
 
     --bg-color: #f9fafb;
     --surface-color: #ffffff;
@@ -25,6 +27,8 @@
     --primary-hover: #6366f1;
     --accent-color: #a78bfa;
     --success-color: #34d399;
+    --excel-color: #2d8b57;
+    --excel-hover: #267949;
 
     --bg-color: #0f172a;
     --surface-color: #1e293b;
@@ -256,6 +260,11 @@ body {
     gap: 1rem;
 }
 
+.export-buttons {
+    display: flex;
+    gap: 0.5rem;
+}
+
 .stats {
     background: var(--success-color);
     color: white;
@@ -265,9 +274,9 @@ body {
     font-size: 0.95rem;
 }
 
-/* Стили для кнопки сохранения PDF */
-.save-pdf-btn {
-    background: #e53e3e;
+/* Стили для кнопки сохранения Excel */
+.save-excel-btn {
+    background: var(--excel-color);
     color: white;
     border: none;
     border-radius: var(--radius);
@@ -280,12 +289,12 @@ body {
     font-weight: 500;
 }
 
-.save-pdf-btn:hover {
-    background: #c53030;
+.save-excel-btn:hover {
+    background: var(--excel-hover);
     transform: scale(1.03);
 }
 
-.save-pdf-btn:disabled {
+.save-excel-btn:disabled {
     background: var(--text-muted);
     cursor: not-allowed;
     transform: none;
@@ -410,14 +419,14 @@ body, .logo-card, .filters-section, .schedule-section, .contact-card {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Анимация загрузки для PDF */
+/* Анимация загрузки */
 @keyframes pulse {
     0% { opacity: 1; }
     50% { opacity: 0.5; }
     100% { opacity: 1; }
 }
 
-.pdf-loading {
+.loading {
     animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -453,9 +462,15 @@ body, .logo-card, .filters-section, .schedule-section, .contact-card {
         justify-content: space-between;
     }
     
-    .save-pdf-btn {
+    .export-buttons {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .save-excel-btn {
         padding: 8px 12px;
         font-size: 0.9rem;
+        justify-content: center;
     }
     
     .filters-grid {
